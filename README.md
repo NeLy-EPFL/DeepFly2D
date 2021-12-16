@@ -21,7 +21,7 @@ inp = path2inp(image_path) # extract list of images under the folder
 dat = DataLoader(Drosophila2Dataset(inp), batch_size=8)
 ```
 
-- Do the inference
+- Do the inference.
 ```python
 from inference import inference
 points2d = inference(model, dat)

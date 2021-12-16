@@ -3,7 +3,6 @@ import os
 
 
 def add_arguments(parser):
-    parser.add_argument("--arch", "-a", metavar="ARCH", default="hg")
     parser.add_argument(
         "-j",
         "--workers",
@@ -18,13 +17,6 @@ def add_arguments(parser):
         type=int,
         metavar="N",
         help="number of total epochs to run",
-    )
-    parser.add_argument(
-        "--start-epoch",
-        default=0,
-        type=int,
-        metavar="N",
-        help="manual epoch number (useful on restarts)",
     )
     # hyper-parameters
     parser.add_argument(
@@ -79,26 +71,6 @@ def add_arguments(parser):
     parser.add_argument(
         "--num_classes", type=int, default=19,
     )
-    parser.add_argument(
-        "-c",
-        "--checkpoint",
-        default="checkpoint",
-        type=str,
-        metavar="PATH",
-        help="path to save checkpoint (default: checkpoint)",
-    )
-    parser.add_argument(
-        "--resume", default=None, type=str, metavar="PATH",
-    )
-    # debug
-
-    parser.add_argument(
-        "--augmentation",
-        "-aug",
-        action="store_true",
-        default=True,
-        help="whether to perform random contrast and brightness change on the training data",
-    )
 
     parser.add_argument(
         "-s",
@@ -125,7 +97,6 @@ def add_arguments(parser):
     )
     parser.add_argument("--inplanes", default=64, type=int, metavar="N")
     parser.add_argument("--stride", default=2, type=int, metavar="N")
-    parser.add_argument("--sigma", default=1, type=int)
     return parser
 
 
