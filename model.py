@@ -10,11 +10,35 @@ import re
 # TODO calculate on only on the non-missing joints
 
 
-
 class Drosophila2DPose(pl.LightningModule):
-    def __init__(self, model):
+    def __init__(
+        self,
+        checkpoint_path: str,
+        stacks,
+        blocks,
+        num_classes,
+        features,
+        inplanes,
+        stride,
+        **args
+    ):
         super().__init__()
-        self.model = model
+
+        self.model = hg(
+            num_stacks=stacks,
+            num_blocks=blocks,
+            num_classes=num_classes,
+            num_feats=features,
+            inplanes=inplanes,
+            init_stride=stride,
+        )
+
+        if checkpoint_path is not None:
+            pretrained = {
+                k.replace("module.", ""): v
+                for (k, v) in torch.load(checkpoint_path)["state_dict"].items()
+            }
+            _ = self.model.load_state_dict(pretrained, strict=False)
 
     def forward(self, x):
         return self.model(x.float().cuda())[-1]

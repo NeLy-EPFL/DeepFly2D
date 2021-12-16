@@ -75,8 +75,10 @@ def add_arguments(parser):
         default=0.1,
         help="LR is multiplied by gamma on schedule.",
     )
-    # paths
-    file_path = os.path.abspath(os.path.dirname(__file__))
+
+    parser.add_argument(
+        "--num_classes", type=int, default=19,
+    )
     parser.add_argument(
         "-c",
         "--checkpoint",

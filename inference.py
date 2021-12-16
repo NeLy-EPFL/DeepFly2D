@@ -23,8 +23,6 @@ def inference(model: Drosophila2DPose, dataset: Drosophila2Dataset) -> np.ndarra
             path = d[0][idx]
             res.append([path, points[idx]])
 
-    # print(res)
-    # return None
     points2d = inp2np(res)
 
     return points2d
