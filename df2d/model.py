@@ -4,10 +4,6 @@ from torch.nn import functional as F
 import pytorch_lightning as pl
 
 from typing import *
-import numpy as np
-import re
-
-# TODO calculate on only on the non-missing joints
 
 
 class Drosophila2DPose(pl.LightningModule):

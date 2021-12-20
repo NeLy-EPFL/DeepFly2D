@@ -6,6 +6,7 @@ from skimage.transform import resize
 from skimage.color import gray2rgb
 from df2d.util import pwd
 import os
+from typing import *
 
 
 class Drosophila2Dataset(torch.utils.data.Dataset):
@@ -22,9 +23,6 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
         self.img_size = img_size
         self.heatmap_size = heatmap_size
         self.augmentation = augmentation
-        self.m = torch.load(os.path.join(pwd(), "../weights/mean.pth.tar"))[
-            "mean"
-        ].data.numpy()[:, np.newaxis, np.newaxis]
 
     def __getitem__(self, idx):
         img_path, pts2d = self.inp[idx]

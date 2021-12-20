@@ -13,6 +13,14 @@ from df2d.parser import create_parser
 from df2d.util import pwd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import subprocess
+
+
+def download_weights(path):
+    command = f"curl -L -o {path} https://www.dropbox.com/s/csgon8uojr3gdd9/sh8_front_j8.tar?dl=0"
+    print("Downloading network weights.")
+    os.makedirs(os.path.dirname(path))
+    subprocess.run(command, shell=True)
 
 
 def inference_folder(
@@ -29,6 +37,8 @@ def inference_folder(
     >>>     (7, 16, 19, 2) # n_cameras, n_images, n_joints, 2
     """
     checkpoint_path = os.path.join(pwd(), "../weights/sh8_deepfly.tar")
+    if not os.path.exists(checkpoint_path):
+        download_weights(checkpoint_path)
     args_default = create_parser().parse_args("").__dict__
     args_default.update(args)
 
@@ -48,7 +58,7 @@ def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
     >>>     ["/data/test/0.jpg", "/data/test/1.jpg"]
     """
     img_list = [
-        (path + p, np.zeros((19)))
+        (os.path.join(path, p), np.zeros((19)))
         for p in os.listdir(path)
         if p.endswith(".jpg") or p.endswith(".png")
     ]
