@@ -12,6 +12,7 @@ from df2d.model import Drosophila2DPose
 from df2d.parser import create_parser
 from df2d.util import pwd
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 
 def inference_folder(
@@ -19,6 +20,7 @@ def inference_folder(
     load_f: Callable = lambda x: plt.imread(x),
     args: Optional[Dict] = {},
     return_heatmap: bool = False,
+    max_img_id: Optional[int] = None,
 ):
     """  returns normalized coordinates in [0, 1].
     >>> from df2d.inference import inference_folder
@@ -32,22 +34,29 @@ def inference_folder(
 
     model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args_default).cuda()
 
-    inp = path2inp(folder)  # extract list of images under the folder
+    inp = path2inp(
+        folder, max_img_id=max_img_id
+    )  # extract list of images under the folder
     dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8)
 
     return inference(model, dat, return_heatmap)
 
 
-def path2inp(path: str) -> List[str]:
+def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
     """
     >>> path2inp("/data/test/")
     >>>     ["/data/test/0.jpg", "/data/test/1.jpg"]
     """
-    return [
+    img_list = [
         (path + p, np.zeros((19)))
         for p in os.listdir(path)
         if p.endswith(".jpg") or p.endswith(".png")
     ]
+
+    if max_img_id is not None:
+        img_list = [img for img in img_list if parse_img_path(img[0])[1] <= max_img_id]
+
+    return img_list
 
 
 def inference(
@@ -55,7 +64,7 @@ def inference(
 ) -> np.ndarray:
     res = list()
     heatmap = list()
-    for batch in dataset:
+    for batch in tqdm(dataset):
         x, _, d = batch
         hm = model(x)
         points = heatmap2points(hm)

@@ -38,7 +38,7 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
         # h w c -> c h w
         img = img.transpose(2, 0, 1)
 
-        # print(img.shape, self.m)
+        # remove the mean
         img = img - 0.22
 
         np.save("/home/user/Desktop/test2", img)
