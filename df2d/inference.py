@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import subprocess
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def download_weights(path):
     command = f"curl -L -o {path} https://www.dropbox.com/s/csgon8uojr3gdd9/sh8_front_j8.tar?dl=0"
@@ -42,7 +43,7 @@ def inference_folder(
     args_default = create_parser().parse_args("").__dict__
     args_default.update(args)
 
-    model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args_default).cuda()
+    model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args_default).to(device)
 
     inp = path2inp(
         folder, max_img_id=max_img_id

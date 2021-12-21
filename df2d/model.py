@@ -5,6 +5,8 @@ import pytorch_lightning as pl
 
 from typing import *
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class Drosophila2DPose(pl.LightningModule):
     def __init__(
@@ -32,12 +34,14 @@ class Drosophila2DPose(pl.LightningModule):
         if checkpoint_path is not None:
             pretrained = {
                 k.replace("module.", ""): v
-                for (k, v) in torch.load(checkpoint_path)["state_dict"].items()
+                for (k, v) in torch.load(checkpoint_path, map_location=device)[
+                    "state_dict"
+                ].items()
             }
             _ = self.model.load_state_dict(pretrained, strict=False)
 
     def forward(self, x):
-        return self.model(x.float().cuda())[-1]
+        return self.model(x.float().to(device))[-1]
 
     def configure_optimizers(self):
         optimizer = torch.optim.RMSprop(self.parameters(), lr=1e-4, weight_decay=1e-5,)

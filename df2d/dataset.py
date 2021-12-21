@@ -1,12 +1,10 @@
 from typing import *
-import torch
+
 import matplotlib.pyplot as plt
 import numpy as np
-from skimage.transform import resize
+import torch
 from skimage.color import gray2rgb
-from df2d.util import pwd
-import os
-from typing import *
+from skimage.transform import resize
 
 
 class Drosophila2Dataset(torch.utils.data.Dataset):
@@ -38,8 +36,6 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
 
         # remove the mean
         img = img - 0.22
-
-        np.save("/home/user/Desktop/test2", img)
 
         return img, pts2d, tuple(self.inp[idx])
 
