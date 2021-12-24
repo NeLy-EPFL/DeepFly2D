@@ -6,6 +6,8 @@ import torch
 from skimage.color import gray2rgb
 from skimage.transform import resize
 
+from df2d.util import draw_labelmap
+
 
 class Drosophila2Dataset(torch.utils.data.Dataset):
     def __init__(
@@ -14,13 +16,15 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
         load_f: Callable = lambda x: plt.imread(x),
         img_size: List[int] = [256, 512],
         heatmap_size: List[int] = [64, 128],
-        augmentation: bool = False,
+        heatmap_channels: int = 19,
+        return_heatmap: bool = False,
     ):
         self.inp = inp
         self.load_f = load_f
         self.img_size = img_size
         self.heatmap_size = heatmap_size
-        self.augmentation = augmentation
+        self.return_heatmap = return_heatmap
+        self.heatmap_channels = heatmap_channels
 
     def __getitem__(self, idx):
         img_path, pts2d = self.inp[idx]
@@ -37,7 +41,23 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
         # remove the mean
         img = img - 0.22
 
-        return img, pts2d, tuple(self.inp[idx])
+        # draw heatmap
+        if self.return_heatmap:
+            hm = np.zeros(
+                (self.heatmap_channels, self.heatmap_size[0], self.heatmap_size[1])
+            )
+            present_joints = [
+                idx for idx in range(self.heatmap_channels) if not np.all(pts2d[idx] == 0)
+            ]
+            for idx in present_joints:
+                hm[idx] = draw_labelmap(
+                    hm[idx], pts2d[idx] * np.array(self.heatmap_size)
+                )
+
+        if self.return_heatmap:
+            return img, pts2d, tuple(self.inp[idx]), hm
+        else:
+            return img, pts2d, tuple(self.inp[idx])
 
     def __len__(self):
         return len(self.inp)

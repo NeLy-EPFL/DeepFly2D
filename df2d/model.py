@@ -44,24 +44,52 @@ class Drosophila2DPose(pl.LightningModule):
         return self.model(x.float().to(device))[-1]
 
     def configure_optimizers(self):
-        optimizer = torch.optim.RMSprop(self.parameters(), lr=1e-4, weight_decay=1e-5,)
+        optimizer = torch.optim.RMSprop(
+            self.parameters(),
+            lr=1e-4,
+            weight_decay=1e-5,
+        )
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer, verbose=True, patience=5
         )
-        return optimizer, scheduler
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+            "monitor": "train_loss",
+        }
+
+    def loss(self, hm_hat, hm):
+        # fmt: off
+        # missing joint predictions are set to all zeros, which is the same of the gt heatmap
+        missing_joints = torch.all(torch.flatten(hm, 2) == 0, dim=2, keepdim=True)
+        missing_joints = missing_joints.float()
+        missing_joints = missing_joints.unsqueeze(-1)
+        hm_hat = hm_hat * (1 - missing_joints)
+        # fmt: on
+        return F.mse_loss(hm, hm_hat)
 
     def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
-        x_hat = self.model(x)
-        loss = F.mse_loss(x_hat, x)
+        x, d, y, hm = train_batch
+        hm = hm.float()
+        hm_hat = self.model(x.float())
+
+        loss = self.loss(hm_hat[0], hm)
+        for idx in range(1, len(hm_hat)):
+            loss += self.loss(hm_hat[idx], hm)
         self.log("train_loss", loss)
+
         return loss
 
     def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
-        x_hat = self.model(x)
-        loss = F.mse_loss(x_hat, x)
+        x, d, y, hm = val_batch
+        hm = hm.float()
+        hm_hat = self.model(x.float())
+
+        loss = self.loss(hm_hat[0], hm)
+        for idx in range(1, len(hm_hat)):
+            loss += self.loss(hm_hat[idx], hm)
         self.log("val_loss", loss)
+
         return loss
 
 
@@ -227,7 +255,11 @@ class HourglassNet(nn.Module):
     def _make_fc(self, inplanes, outplanes):
         bn = nn.BatchNorm2d(inplanes)
         conv = nn.Conv2d(inplanes, outplanes, kernel_size=1, bias=True)
-        return nn.Sequential(conv, bn, self.relu,)
+        return nn.Sequential(
+            conv,
+            bn,
+            self.relu,
+        )
 
     def forward(self, x):
         out = []
