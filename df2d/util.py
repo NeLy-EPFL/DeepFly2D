@@ -7,9 +7,10 @@ def pwd():
 
 
 # draw 2d gaussians
-def draw_labelmap(img: np.ndarray, pt, sigma=7, type="Gaussian"):
+def draw_labelmap(img: np.ndarray, pt, sigma=3, type="Gaussian"):
     # Draw a 2D gaussian
     # Adopted from https://github.com/anewell/pose-hg-train/blob/master/src/pypose/draw.py
+    pt[0], pt[1] = pt[1], pt[0]
 
     # Check that any part of the gaussian is in-bounds
     ul = [int(pt[0] - 3 * sigma), int(pt[1] - 3 * sigma)]
@@ -33,3 +34,27 @@ def draw_labelmap(img: np.ndarray, pt, sigma=7, type="Gaussian"):
 
     img[img_y[0] : img_y[1], img_x[0] : img_x[1]] = g[g_y[0] : g_y[1], g_x[0] : g_x[1]]
     return img
+
+
+import torch
+from torch.functional import Tensor
+from torchvision import utils
+
+
+def tensorboard_plot_image(
+    writer, x: Tensor, name: str, epoch: int, scale_each: bool = False
+) -> None:
+    """
+    records single image into tensorboard.
+    tensorboard logs are saved under lightning_logs.
+    >>> SU.stensorboard_plot_image(
+        self.logger.experiment,
+        torch.cat([img1[:, :, -1], img2[:, :, -1]], dim=2),
+        "recons",
+        self.current_epoch,
+    )
+    """
+    with torch.no_grad():
+        x = x[:16].clone()
+        grid = utils.make_grid(x, nrow=4, scale_each=scale_each, normalize=True)
+        writer.add_image(name, grid, epoch)

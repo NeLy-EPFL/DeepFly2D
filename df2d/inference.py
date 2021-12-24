@@ -17,6 +17,7 @@ import subprocess
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 def download_weights(path):
     command = f"curl -L -o {path} https://www.dropbox.com/s/csgon8uojr3gdd9/sh8_front_j8.tar?dl=0"
     print("Downloading network weights.")
@@ -31,7 +32,7 @@ def inference_folder(
     return_heatmap: bool = False,
     max_img_id: Optional[int] = None,
 ):
-    """  returns normalized coordinates in [0, 1].
+    """returns normalized coordinates in [0, 1].
     >>> from df2d.inference import inference_folder
     >>> points2d = inference_folder('/home/user/Desktop/DeepFly3D/data/test/')
     >>> points2d.shape
@@ -53,6 +54,29 @@ def inference_folder(
     return inference(model, dat, return_heatmap)
 
 
+import pickle
+
+
+def pr2inp(path: str) -> List[str]:
+    """converts pose result file into inp format
+    >>> pr2inp("/data/test/df3d/df3d_result.pkl")
+    >>>     [("/data/test/0.jpg", [[0,0], [.5,.5]]), ("/data/test/1.jpg", [[0,0], [.5,.5]])]
+    """
+    img_list = list()
+    points2d = pickle.load(open(path, "rb"))["points2d"]
+    n_cameras, n_images = points2d.shape[0] - 1, points2d.shape[1] - 1
+
+    for cid, imgid in product(range(n_cameras), range(n_images)):
+        img_path = os.path.join(
+            os.path.dirname(path),
+            "../camera_{cid}_img_{imgid}.jpg".format(cid=cid, imgid=imgid),
+        )
+        pts = points2d[cid, imgid][:19]
+        img_list.append((img_path, pts))
+
+    return img_list
+
+
 def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
     """
     >>> path2inp("/data/test/")
@@ -71,7 +95,9 @@ def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
 
 
 def inference(
-    model: Drosophila2DPose, dataset: Drosophila2Dataset, return_heatmap: bool = False,
+    model: Drosophila2DPose,
+    dataset: Drosophila2Dataset,
+    return_heatmap: bool = False,
 ) -> np.ndarray:
     res = list()
     heatmap = list()
@@ -95,14 +121,14 @@ def inference(
 
 
 def parse_img_path(name: str) -> Tuple[int, int]:
-    """returns cid and img_id """
+    """returns cid and img_id"""
     name = os.path.basename(name)
     match = re.match(r"camera_(\d+)_img_(\d+)", name.replace(".jpg", ""))
     return int(match[1]), int(match[2])
 
 
 def inp2np(inp: List) -> np.ndarray:
-    """ converts a list representation into numpy array in format C x J x 2 """
+    """converts a list representation into numpy array in format C x J x 2"""
     n_cameras = max([parse_img_path(p)[0] for (p, _) in inp]) + 1
     n_images = max([parse_img_path(p)[1] for (p, _) in inp]) + 1
     n_joints = inp[0][1].shape[0]
@@ -120,11 +146,10 @@ from itertools import product
 
 
 def heatmap2points(x: Tensor) -> Tensor:
-    """ B x C x H x W -> B x C x 2"""
+    """B x C x H x W -> B x C x 2"""
     out = torch.zeros((x.size(0), x.size(1), 2))
     for b, c in product(range(x.size(0)), range(x.size(1))):
         out[b, c] = (x[b, c] == torch.max(x[b, c])).nonzero(as_tuple=False)[0]
         out[b, c] /= torch.tensor([x.size(2), x.size(3)])
 
     return out
-

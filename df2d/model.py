@@ -3,6 +3,8 @@ from torch import nn
 from torch.nn import functional as F
 import pytorch_lightning as pl
 
+from df2d.util import tensorboard_plot_image
+
 from typing import *
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -61,6 +63,7 @@ class Drosophila2DPose(pl.LightningModule):
     def loss(self, hm_hat, hm):
         # fmt: off
         # missing joint predictions are set to all zeros, which is the same of the gt heatmap
+        #   therefore giving zero loss
         missing_joints = torch.all(torch.flatten(hm, 2) == 0, dim=2, keepdim=True)
         missing_joints = missing_joints.float()
         missing_joints = missing_joints.unsqueeze(-1)
@@ -77,6 +80,16 @@ class Drosophila2DPose(pl.LightningModule):
         for idx in range(1, len(hm_hat)):
             loss += self.loss(hm_hat[idx], hm)
         self.log("train_loss", loss)
+
+        # log images
+        if batch_idx == 0:
+            tensorboard_plot_image(
+                self.logger.experiment,
+                torch.cat([x[:, [0], ::4, ::4], hm.sum(dim=1, keepdims=True)], dim=2),
+                name="data",
+                epoch=self.current_epoch,
+                scale_each=True,
+            )
 
         return loss
 

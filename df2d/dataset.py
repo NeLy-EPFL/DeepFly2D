@@ -47,11 +47,13 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
                 (self.heatmap_channels, self.heatmap_size[0], self.heatmap_size[1])
             )
             present_joints = [
-                idx for idx in range(self.heatmap_channels) if not np.all(pts2d[idx] == 0)
+                idx
+                for idx in range(self.heatmap_channels)
+                if not np.all(pts2d[idx] == 0)
             ]
             for idx in present_joints:
                 hm[idx] = draw_labelmap(
-                    hm[idx], pts2d[idx] * np.array(self.heatmap_size)
+                    hm[idx], pts2d[idx]  * np.array(self.heatmap_size)
                 )
 
         if self.return_heatmap:
