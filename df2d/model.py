@@ -1,11 +1,11 @@
+from typing import *
+
+import pytorch_lightning as pl
 import torch
 from torch import nn
 from torch.nn import functional as F
-import pytorch_lightning as pl
 
-from df2d.util import tensorboard_plot_image
-
-from typing import *
+from df2d.util import heatmap2points, tensorboard_plot_image
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -45,6 +45,11 @@ class Drosophila2DPose(pl.LightningModule):
     def forward(self, x):
         return self.model(x.float().to(device))[-1]
 
+    def mse(self, hm_hat, y):
+        y_hat = heatmap2points(hm_hat).cuda()
+        mse = torch.norm(y_hat - y, dim=2)
+        return mse.mean()
+
     def configure_optimizers(self):
         optimizer = torch.optim.RMSprop(
             self.parameters(),
@@ -57,7 +62,7 @@ class Drosophila2DPose(pl.LightningModule):
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
-            "monitor": "train_loss",
+            "monitor": "train/loss",
         }
 
     def loss(self, hm_hat, hm):
@@ -73,13 +78,14 @@ class Drosophila2DPose(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         x, d, y, hm = train_batch
-        hm = hm.float()
-        hm_hat = self.model(x.float())
+        x = x.to(device).float()
+        hm = hm.to(device).float()
+        hm_hat = self.model(x)
 
         loss = self.loss(hm_hat[0], hm)
         for idx in range(1, len(hm_hat)):
             loss += self.loss(hm_hat[idx], hm)
-        self.log("train_loss", loss)
+        self.log("train/loss", loss, on_step=True)
 
         # log images
         if batch_idx == 0:
@@ -91,24 +97,30 @@ class Drosophila2DPose(pl.LightningModule):
                 scale_each=True,
             )
 
+            # log mse loss
+            self.log(name="train/mse", value=self.mse(hm_hat[-1], d), prog_bar=True)
+
         return loss
 
     def validation_step(self, val_batch, batch_idx):
         x, d, y, hm = val_batch
-        hm = hm.float()
+        x = x.to(device).float()
+        hm = hm.to(device).float()
         hm_hat = self.model(x.float())
 
         loss = self.loss(hm_hat[0], hm)
         for idx in range(1, len(hm_hat)):
             loss += self.loss(hm_hat[idx], hm)
-        self.log("val_loss", loss)
+        self.log("val/loss", loss, on_step=True)
+
+        # log mse loss
+        self.log(name="val/mse", value=self.mse(hm_hat[-1], d), prog_bar=True)
 
         return loss
 
 
 """
-Hourglass network inserted in the pre-activated Resnet 
-(c) YANG, Wei 
+Hourglass network inserted in the pre-activated Resnet
 """
 import torch.nn as nn
 import torch.nn.functional as F

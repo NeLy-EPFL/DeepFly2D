@@ -1,19 +1,19 @@
 import os
 import re
+import subprocess
+from itertools import product
 from typing import *
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.functional import Tensor
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from df2d.dataset import Drosophila2Dataset
 from df2d.model import Drosophila2DPose
 from df2d.parser import create_parser
-from df2d.util import pwd
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-import subprocess
+from df2d.util import heatmap2points, pwd
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -71,7 +71,17 @@ def pr2inp(path: str) -> List[str]:
             os.path.dirname(path),
             "../camera_{cid}_img_{imgid}.jpg".format(cid=cid, imgid=imgid),
         )
-        pts = points2d[cid, imgid][:19]
+
+        # skip is no pose inside
+        if np.all(points2d[cid, imgid] == 0):
+            continue
+
+        if points2d[cid, imgid, 0, 0] == 0:
+            pts = points2d[cid, imgid][19:]
+            pts[..., 1] = 1 - pts[..., 1]
+        else:
+            pts = points2d[cid, imgid][:19]
+
         img_list.append((img_path, pts))
 
     return img_list
@@ -140,16 +150,3 @@ def inp2np(inp: List) -> np.ndarray:
         points2d[cid, imgid] = pts
 
     return points2d
-
-
-from itertools import product
-
-
-def heatmap2points(x: Tensor) -> Tensor:
-    """B x C x H x W -> B x C x 2"""
-    out = torch.zeros((x.size(0), x.size(1), 2))
-    for b, c in product(range(x.size(0)), range(x.size(1))):
-        out[b, c] = (x[b, c] == torch.max(x[b, c])).nonzero(as_tuple=False)[0]
-        out[b, c] /= torch.tensor([x.size(2), x.size(3)])
-
-    return out
