@@ -30,9 +30,11 @@ def inference_folder(
     load_f: Callable = lambda x: plt.imread(x),
     args: Optional[Dict] = {},
     return_heatmap: bool = False,
+    return_confidence: bool = False,
     max_img_id: Optional[int] = None,
 ):
-    """returns normalized coordinates in [0, 1].
+    """processes all the images under a folder.
+        returns normalized coordinates in [0, 1].
     >>> from df2d.inference import inference_folder
     >>> points2d = inference_folder('/home/user/Desktop/DeepFly3D/data/test/')
     >>> points2d.shape
@@ -51,7 +53,9 @@ def inference_folder(
     )  # extract list of images under the folder
     dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8)
 
-    return inference(model, dat, return_heatmap)
+    return inference(
+        model, dat, return_heatmap=return_heatmap, return_confidence=return_confidence
+    )
 
 
 import pickle
@@ -72,7 +76,7 @@ def pr2inp(path: str) -> List[str]:
             "../camera_{cid}_img_{imgid}.jpg".format(cid=cid, imgid=imgid),
         )
 
-        # skip is no pose inside
+        # skip if pose is missing
         if np.all(points2d[cid, imgid] == 0):
             continue
 
@@ -108,26 +112,37 @@ def inference(
     model: Drosophila2DPose,
     dataset: Drosophila2Dataset,
     return_heatmap: bool = False,
+    return_confidence: bool = False,
 ) -> np.ndarray:
     res = list()
+    res_conf = list()
     heatmap = list()
     for batch in tqdm(dataset):
         x, _, d = batch
         hm = model(x)
-        points = heatmap2points(hm)
+        points, conf = heatmap2points(hm)
         points = points.cpu().data.numpy()
+        conf = conf.cpu().data.numpy()
         if return_heatmap:
             heatmap.append(hm.cpu().data.numpy())
         for idx in range(x.size(0)):
             path = d[0][idx]
             res.append([path, points[idx]])
+            res_conf.append([path, conf[idx]])
 
     points2d = inp2np(res)
+    conf = inp2np(res_conf)
 
-    if not return_heatmap:
+    if not return_heatmap and not return_confidence:
         return points2d
-    else:
-        return points2d, np.concatenate(heatmap, axis=0)
+
+    ret = [points2d]
+    if return_heatmap:
+        ret.append(np.concatenate(heatmap, axis=0))
+    if return_confidence:
+        ret.append(conf)
+
+    return ret
 
 
 def parse_img_path(name: str) -> Tuple[int, int]:
@@ -138,12 +153,18 @@ def parse_img_path(name: str) -> Tuple[int, int]:
 
 
 def inp2np(inp: List) -> np.ndarray:
-    """converts a list representation into numpy array in format C x J x 2"""
+    """converts a list representation into numpy array in format C x J x 2
+    each list element is a tuple, where the first element is a path in the camera_{camid}_img_{img_id} format.
+    second element is a numpy array
+    """
     n_cameras = max([parse_img_path(p)[0] for (p, _) in inp]) + 1
     n_images = max([parse_img_path(p)[1] for (p, _) in inp]) + 1
-    n_joints = inp[0][1].shape[0]
 
-    points2d = np.ones((n_cameras, n_images + 1, n_joints, 2))
+    print(inp[0][1].shape)
+    n_joints = inp[0][1].shape[0]
+    n_dim = inp[0][1].shape[1]
+
+    points2d = np.ones((n_cameras, n_images + 1, n_joints, n_dim))
 
     for (path, pts) in inp:
         cid, imgid = parse_img_path(path)

@@ -9,15 +9,15 @@ def pwd():
     return os.path.dirname(os.path.realpath(__file__))
 
 
-
 def heatmap2points(x: Tensor) -> Tensor:
     """B x C x H x W -> B x C x 2"""
     out = torch.zeros((x.size(0), x.size(1), 2))
+    conf = torch.zeros((x.size(0), x.size(1), 1))
     for b, c in product(range(x.size(0)), range(x.size(1))):
-        out[b, c] = (x[b, c] == torch.max(x[b, c])).nonzero(as_tuple=False)[0]
+        conf[b, c] = torch.max(x[b, c])
+        out[b, c] = (x[b, c] == conf[b, c]).nonzero(as_tuple=False)[0]
         out[b, c] /= torch.tensor([x.size(2), x.size(3)])
-
-    return out
+    return out, conf
 
 
 # draw 2d gaussians
