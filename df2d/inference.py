@@ -96,10 +96,11 @@ def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
     >>> path2inp("/data/test/")
     >>>     ["/data/test/0.jpg", "/data/test/1.jpg"]
     """
+    pattern = re.compile(r'camera_\d*_img_\d*.(jpg|png)')
     img_list = [
         (os.path.join(path, p), np.zeros((19)))
         for p in os.listdir(path)
-        if p.endswith(".jpg") or p.endswith(".png")
+        if pattern.match(p)
     ]
 
     if max_img_id is not None:
@@ -149,7 +150,10 @@ def parse_img_path(name: str) -> Tuple[int, int]:
     """returns cid and img_id"""
     name = os.path.basename(name)
     match = re.match(r"camera_(\d+)_img_(\d+)", name.replace(".jpg", ""))
+    if match is None:
+        print(f'Cannot parse image {name}')
     return int(match[1]), int(match[2])
+        
 
 
 def inp2np(inp: List) -> np.ndarray:
