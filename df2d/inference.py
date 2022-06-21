@@ -121,7 +121,7 @@ def inference(
     for batch in tqdm(dataset):
         x, _, d = batch
         hm = model(x)
-        points, conf = heatmap2points(hm)
+        points, conf = heatmap2points(hm.cpu())
         points = points.cpu().data.numpy()
         conf = conf.cpu().data.numpy()
         if return_heatmap:
