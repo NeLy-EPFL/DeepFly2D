@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="nely-df2d",
-    version="0.13",
+    version="0.14",
     packages=["df2d"],
     author="Semih Gunel",
     author_email="gunelsemih@gmail.com",
