@@ -36,7 +36,7 @@ class Drosophila2DPose(pl.LightningModule):
         if checkpoint_path is not None:
             pretrained = {
                 k.replace("module.", ""): v
-                for (k, v) in torch.load(checkpoint_path, map_location=device)[
+                for (k, v) in torch.load(checkpoint_path, map_location=device, weights_only=True)[
                     "state_dict"
                 ].items()
             }
