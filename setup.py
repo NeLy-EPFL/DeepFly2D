@@ -13,4 +13,13 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/NeLy-EPFL/Drosophila2DPose",
+    install_requires = [
+        "matplotlib",
+        "numpy",
+        "pytorch_lightning",
+        "scikit-image",
+        "torch",
+        "torchvision",
+        "tqdm",
+    ]
 )

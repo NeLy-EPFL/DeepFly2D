@@ -51,7 +51,7 @@ def inference_folder(
     inp = path2inp(
         folder, max_img_id=max_img_id
     )  # extract list of images under the folder
-    dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8)
+    dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8, num_workers=16, pin_memory=True)
 
     return inference(
         model, dat, return_heatmap=return_heatmap, return_confidence=return_confidence
@@ -108,7 +108,7 @@ def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
 
     return img_list
 
-
+@torch.inference_mode()
 def inference(
     model: Drosophila2DPose,
     dataset: Drosophila2Dataset,
@@ -118,6 +118,7 @@ def inference(
     res = list()
     res_conf = list()
     heatmap = list()
+
     for batch in tqdm(dataset):
         x, _, d = batch
         hm = model(x)

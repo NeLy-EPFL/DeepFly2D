@@ -2,7 +2,9 @@ import os
 from itertools import product
 
 import numpy as np
+import torch
 from torch.functional import Tensor
+from torchvision import utils
 
 
 def pwd():
@@ -48,11 +50,6 @@ def draw_labelmap(img: np.ndarray, pt, sigma=3, type="Gaussian"):
 
     img[img_y[0] : img_y[1], img_x[0] : img_x[1]] = g[g_y[0] : g_y[1], g_x[0] : g_x[1]]
     return img
-
-
-import torch
-from torch.functional import Tensor
-from torchvision import utils
 
 
 def tensorboard_plot_image(
