@@ -19,6 +19,7 @@ setup(
         "pytorch_lightning",
         "scikit-image",
         "torch",
+        "torchvision",
         "tqdm",
     ]
 )
