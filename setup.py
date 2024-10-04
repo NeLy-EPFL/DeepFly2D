@@ -12,7 +12,7 @@ setup(
     description="2D pose estimation pipeline for tethered Drosophila.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/NeLy-EPFL/Drosophila2DPose",
+    url="https://github.com/NeLy-EPFL/DeepFly2D",
     install_requires = [
         "matplotlib",
         "numpy",
