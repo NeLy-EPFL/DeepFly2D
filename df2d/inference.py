@@ -47,6 +47,7 @@ def inference_folder(
     args_default.update(args)
 
     model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args_default).to(device)
+    model.eval() # makes pose estimation more deterministic during inference #5
 
     inp = path2inp(
         folder, max_img_id=max_img_id
