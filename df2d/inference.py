@@ -6,6 +6,7 @@ from typing import *
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pympler.tracker
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -14,6 +15,7 @@ from df2d.dataset import Drosophila2Dataset
 from df2d.model import Drosophila2DPose
 from df2d.parser import create_parser
 from df2d.util import heatmap2points, pwd
+import psutil
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -116,11 +118,18 @@ def inference(
     return_heatmap: bool = False,
     return_confidence: bool = False,
 ) -> np.ndarray:
+    def print_current_memory_usage():
+        print(f"Current memory usage: {psutil.Process().memory_info().rss / 1024 ** 2} MiB")
+    memory_tracker = pympler.tracker.SummaryTracker()
     res = list()
     res_conf = list()
     heatmap = list()
 
-    for batch in tqdm(dataset):
+    for n, batch in tqdm(enumerate(dataset)):
+        if n % 1000 == 0:
+            print('\n')
+            memory_tracker.print_diff()
+            print_current_memory_usage()
         x, _, d = batch
         hm = model(x)
         points, conf = heatmap2points(hm.cpu())
