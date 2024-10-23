@@ -118,8 +118,11 @@ def inference(
     return_heatmap: bool = False,
     return_confidence: bool = False,
 ) -> np.ndarray:
-    def print_current_memory_usage():
-        print(f"Current memory usage: {psutil.Process().memory_info().rss / 1024 ** 2} MiB")
+    def print_process_memory_usage():
+        print(f"Current process memory usage: {psutil.Process().memory_info().rss / 1024 ** 2} MiB")
+    def print_system_memory_usage():
+        mem = psutil.virtual_memory()
+        print(f"Current system memory usage: {mem.used / 1024**3:.2f} GiB/{mem.total/ 1024**3:.2f} GiB ({mem.percent}%)")
     memory_tracker = pympler.tracker.SummaryTracker()
     res = list()
     res_conf = list()
@@ -129,7 +132,8 @@ def inference(
         if n % 1000 == 0:
             print('\n')
             memory_tracker.print_diff()
-            print_current_memory_usage()
+            print_process_memory_usage()
+            print_system_memory_usage()
         x, _, d = batch
         hm = model(x)
         points, conf = heatmap2points(hm.cpu())
