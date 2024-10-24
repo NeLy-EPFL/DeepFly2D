@@ -7,6 +7,8 @@ from typing import *
 import matplotlib.pyplot as plt
 import numpy as np
 import pympler.tracker
+import humanize
+from guppy import hpy;
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -118,22 +120,43 @@ def inference(
     return_heatmap: bool = False,
     return_confidence: bool = False,
 ) -> np.ndarray:
-    def print_process_memory_usage():
-        print(f"Current process memory usage: {psutil.Process().memory_info().rss / 1024 ** 2} MiB")
+    def print_process_memory_usage(pid: int | None = None, prefix: str | None = None):
+        memory = psutil.Process(pid).memory_full_info()
+        mem_sizes = ", ".join([
+            f"{mem_type}={humanize.naturalsize(memory.__getattribute__(mem_type), True)}"
+            for mem_type in ["uss", "rss", "vms", "pss", "shared", "text", "lib", "data", "dirty", "swap"]
+        ])
+        if prefix is not None:
+            print(prefix, f"Process {pid if pid is not None else ''} memory usage: ({mem_sizes})")
+        else:
+            print(f"Process {pid if pid is not None else ''} memory usage: ({mem_sizes})")
     def print_system_memory_usage():
         mem = psutil.virtual_memory()
-        print(f"Current system memory usage: {mem.used / 1024**3:.2f} GiB/{mem.total/ 1024**3:.2f} GiB ({mem.percent}%)")
+        print(f"Current system memory usage: {humanize.naturalsize(mem.used)}/{humanize.naturalsize(mem.total)} GiB ({mem.percent}%)")
+    def print_child_processes():
+        children = psutil.Process().children(recursive=True)
+        print("Child processes = ", [
+            f"{child_process.name()} (pid={child_process.pid}, uss={humanize.naturalsize(psutil.Process(child_process.pid).memory_full_info().uss, True)}, rss={humanize.naturalsize(psutil.Process(child_process.pid).memory_full_info().uss, True)})"
+            for child_process in children
+        ])
+            # print_process_memory_usage(child_process.pid, f"\t{child_process}")
+    def print_heap():
+        print(hpy().heap())
     memory_tracker = pympler.tracker.SummaryTracker()
     res = list()
     res_conf = list()
     heatmap = list()
 
-    for n, batch in tqdm(enumerate(dataset)):
+    for n, batch in enumerate(tqdm(dataset)):
         if n % 1000 == 0:
             print('\n')
             memory_tracker.print_diff()
             print_process_memory_usage()
+            print_child_processes()
             print_system_memory_usage()
+            print_heap()
+            if psutil.Process().memory_full_info().rss > 10e9:
+                breakpoint()
         x, _, d = batch
         hm = model(x)
         points, conf = heatmap2points(hm.cpu())
