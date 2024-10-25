@@ -169,7 +169,7 @@ def inp2np(inp: List) -> np.ndarray:
     n_joints = inp[0][1].shape[0]
     n_dim = inp[0][1].shape[1]
 
-    points2d = np.zeros((n_cameras, n_images + 1, n_joints, n_dim))
+    points2d = np.zeros((n_cameras, n_images, n_joints, n_dim))
 
     for (path, pts) in inp:
         cid, imgid = parse_img_path(path)
