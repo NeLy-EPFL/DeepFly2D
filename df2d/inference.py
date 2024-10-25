@@ -52,7 +52,10 @@ def inference_folder(
     inp = path2inp(
         folder, max_img_id=max_img_id
     )  # extract list of images under the folder
-    dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8, num_workers=16, pin_memory=True)
+
+    # See #7, from https://github.com/pytorch/pytorch/blob/0ff6f7a04083d3fb7f4084cc16175d6cce6ff4b5/torch/utils/data/dataloader.py#L592-L621 
+    num_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 4
+    dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8, num_workers=num_workers, pin_memory=True)
 
     return inference(
         model, dat, return_heatmap=return_heatmap, return_confidence=return_confidence
