@@ -43,10 +43,10 @@ class Drosophila2DPose(pl.LightningModule):
             _ = self.model.load_state_dict(pretrained, strict=False)
 
     def forward(self, x):
-        return self.model(x.float().to(device))[-1]
+        return self.model(x.to(device))[-1]
 
     def mse(self, hm_hat, y):
-        y_hat, _ = heatmap2points(hm_hat).cuda()
+        y_hat, _ = heatmap2points(hm_hat)
         mse = torch.norm(y_hat - y, dim=2)
         return mse.mean()
 
