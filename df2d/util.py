@@ -1,5 +1,6 @@
 import os
 from itertools import product
+from typing import Tuple
 
 import numpy as np
 import torch
@@ -11,7 +12,7 @@ def pwd():
     return os.path.dirname(os.path.realpath(__file__))
 
 
-def heatmap2points(x: Tensor) -> tuple[Tensor,Tensor]:
+def heatmap2points(x: Tensor) -> Tuple[Tensor,Tensor]:
     """B x C x H x W -> B x C x 2"""
     out = torch.zeros((x.size(0), x.size(1), 2), device=x.device)
     conf = torch.zeros((x.size(0), x.size(1), 1), device=x.device)

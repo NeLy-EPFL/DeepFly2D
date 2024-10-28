@@ -90,7 +90,7 @@ class Drosophila2Dataset(torch.utils.data.Dataset):
             raise ValueError(f"Can't find all images in dataset - found {self.num_cameras} cameras with {self.num_images} each, but only found {len(self.imgs)} total images")
         
     
-    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, tuple[int,int]]:
+    def __getitem__(self, index: int) -> Tuple[torch.Tensor, torch.Tensor, Tuple[int,int]]:
         """
         Args:
             index (int): Index of the data to get
