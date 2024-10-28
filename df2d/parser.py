@@ -1,5 +1,4 @@
 import argparse
-import os
 
 
 def add_arguments(parser):
@@ -9,7 +8,7 @@ def add_arguments(parser):
         default=8,
         type=int,
         metavar="N",
-        help="number of data loading workers (default: 4)",
+        help="number of data loading workers",
     )
     parser.add_argument(
         "--epochs",

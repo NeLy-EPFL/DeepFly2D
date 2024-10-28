@@ -1,10 +1,11 @@
 import os
+import pickle
 import re
 import subprocess
 from itertools import product
 from typing import *
 
-import matplotlib.pyplot as plt
+from df2d.parser import create_parser
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -12,7 +13,6 @@ from tqdm import tqdm
 
 from df2d.dataset import Drosophila2Dataset
 from df2d.model import Drosophila2DPose
-from df2d.parser import create_parser
 from df2d.util import heatmap2points, pwd
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -24,45 +24,50 @@ def download_weights(path):
     os.makedirs(os.path.dirname(path))
     subprocess.run(command, shell=True)
 
+# type annotations because the return of this function depends on the return_* bool args
+@overload
+def inference_folder(folder: str, camera_ids_to_flip: List[int], return_heatmap: Literal[False], return_confidence: Literal[False], max_img_id: Optional[int] = None, batch_size: int = 8, disable_pin_memory: bool = False, model_args: Dict[str,Any] = {}) -> np.ndarray: ...
+@overload
+def inference_folder(folder: str, camera_ids_to_flip: List[int], return_heatmap: Literal[True], return_confidence: Literal[False], max_img_id: Optional[int] = None, batch_size: int = 8, disable_pin_memory: bool = False, model_args: Dict[str,Any] = {}) -> Tuple[np.ndarray, np.ndarray]: ...
+@overload
+def inference_folder(folder: str, camera_ids_to_flip: List[int], return_heatmap: Literal[False], return_confidence: Literal[True], max_img_id: Optional[int] = None, batch_size: int = 8, disable_pin_memory: bool = False, model_args: Dict[str,Any] = {}) -> Tuple[np.ndarray, np.ndarray]: ...
+@overload
+def inference_folder(folder: str, camera_ids_to_flip: List[int], return_heatmap: Literal[True], return_confidence: Literal[True], max_img_id: Optional[int] = None, batch_size: int = 8, disable_pin_memory: bool = False, model_args: Dict[str,Any] = {}) -> Tuple[np.ndarray, np.ndarray,np.ndarray]: ...
 
 def inference_folder(
     folder: str,
-    load_f: Callable = lambda x: plt.imread(x),
-    args: Optional[Dict] = {},
+    camera_ids_to_flip: List[int],
     return_heatmap: bool = False,
     return_confidence: bool = False,
     max_img_id: Optional[int] = None,
+    batch_size: int = 8, 
+    disable_pin_memory: bool = False, 
+    model_args: Dict[str,Any] = {},
 ):
     """processes all the images under a folder.
         returns normalized coordinates in [0, 1].
     >>> from df2d.inference import inference_folder
     >>> points2d = inference_folder('/home/user/Desktop/DeepFly3D/data/test/')
     >>> points2d.shape
-    >>>     (7, 16, 19, 2) # n_cameras, n_images, n_joints, 2
+    >>>     (7, 15, 19, 2) # n_cameras, n_images, n_joints, 2
     """
     checkpoint_path = os.path.join(pwd(), "../weights/sh8_deepfly.tar")
     if not os.path.exists(checkpoint_path):
         download_weights(checkpoint_path)
-    args_default = create_parser().parse_args("").__dict__
-    args_default.update(args)
+    args = create_parser().parse_args("").__dict__
+    args.update(model_args)
 
-    model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args_default).to(device)
+    model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args).to(device)
     model.eval() # makes pose estimation more deterministic during inference #5
-
-    inp = path2inp(
-        folder, max_img_id=max_img_id
-    )  # extract list of images under the folder
 
     # See #7, from https://github.com/pytorch/pytorch/blob/0ff6f7a04083d3fb7f4084cc16175d6cce6ff4b5/torch/utils/data/dataloader.py#L592-L621 
     num_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 4
-    dat = DataLoader(Drosophila2Dataset(inp, load_f=load_f), batch_size=8, num_workers=num_workers, pin_memory=True)
+    dataset = Drosophila2Dataset(folder, None, camera_ids_to_flip, max_img_id+1 if max_img_id is not None else None)
+    dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=not disable_pin_memory)
 
     return inference(
-        model, dat, return_heatmap=return_heatmap, return_confidence=return_confidence
+        model, dataloader, return_heatmap=return_heatmap, return_confidence=return_confidence
     )
-
-
-import pickle
 
 
 def pr2inp(path: str) -> List[str]:
@@ -95,7 +100,7 @@ def pr2inp(path: str) -> List[str]:
     return img_list
 
 
-def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
+def path2inp(path: str, max_img_id: Optional[int] = None):
     """
     >>> path2inp("/data/test/")
     >>>     ["/data/test/0.jpg", "/data/test/1.jpg"]
@@ -112,70 +117,68 @@ def path2inp(path: str, max_img_id: Optional[int] = None) -> List[str]:
 
     return img_list
 
+
 @torch.inference_mode()
 def inference(
     model: Drosophila2DPose,
-    dataset: Drosophila2Dataset,
+    dataloader: DataLoader,
     return_heatmap: bool = False,
     return_confidence: bool = False,
-) -> np.ndarray:
-    res = list()
-    res_conf = list()
-    heatmap = list()
+):   
+    camera_ids_output: List[int] = []
+    frame_ids_output: List[int] = []
+    points_output: List[np.ndarray] = []
+    conf_output: List[np.ndarray] = []
+    heatmaps: List[np.ndarray] = []
 
-    for batch in tqdm(dataset):
-        x, _, d = batch
-        hm = model(x)
-        points, conf = heatmap2points(hm.cpu())
-        points = points.cpu().data.numpy()
-        conf = conf.cpu().data.numpy()
+    for batch in tqdm(dataloader):
+        x, _, (camera_ids, frame_ids) = batch
+        heatmap_batch = model(x).cpu()
+        points_batch, conf_batch = heatmap2points(heatmap_batch)
+
+        camera_ids_output += list(camera_ids.numpy())
+        frame_ids_output += list(frame_ids.numpy())
+        points_output += [points for points in points_batch.numpy()]
+        if return_confidence:
+            conf_output += [conf for conf in conf_batch.numpy()]
+
         if return_heatmap:
-            heatmap.append(hm.cpu().data.numpy())
-        for idx in range(x.size(0)):
-            path = d[0][idx]
-            res.append([path, points[idx]])
-            res_conf.append([path, conf[idx]])
+            heatmaps += [heatmap for heatmap in heatmap_batch.numpy()]
 
-    points2d = inp2np(res)
-    conf = inp2np(res_conf)
+    points2d = reshape_outputs(points_output, camera_ids_output, frame_ids_output)
 
     if not return_heatmap and not return_confidence:
         return points2d
-
-    ret = [points2d]
-    if return_heatmap:
-        ret.append(np.concatenate(heatmap, axis=0))
+    
+    ret = (points2d,)
     if return_confidence:
-        ret.append(conf)
-
+        conf = reshape_outputs(conf_output, camera_ids_output, frame_ids_output)
+        ret += (conf,)
+    if return_heatmap:
+        heatmap = reshape_outputs(heatmap_batch, camera_ids_output, frame_ids_output)
+        ret += (heatmap,)
     return ret
 
-
 def parse_img_path(name: str) -> Tuple[int, int]:
-    """returns cid and img_id"""
+    """returns camera id and image id from image path like camera_3_img_234.jpg"""
     name = os.path.basename(name)
-    match = re.match(r"camera_(\d+)_img_(\d+)", name.replace(".jpg", ""))
+    match = re.match(r"camera_(\d+)_img_(\d+).(jpg|png)", name)
     if match is None:
-        print(f'Cannot parse image {name}')
+        raise ValueError(f'Cannot parse image {name}')
     return int(match[1]), int(match[2])
-        
 
 
-def inp2np(inp: List) -> np.ndarray:
-    """converts a list representation into numpy array in format C x J x 2
-    each list element is a tuple, where the first element is a path in the camera_{camid}_img_{img_id} format.
-    second element is a numpy array
+def reshape_outputs(outputs: List[np.ndarray], camera_ids: List[int], frame_ids: List[int]) -> np.ndarray:
     """
-    n_cameras = max([parse_img_path(p)[0] for (p, _) in inp]) + 1
-    n_images = max([parse_img_path(p)[1] for (p, _) in inp]) + 1
+    Converts a list representation (length num_cameras*num_frames) of np.arrays into a numpy array of shape [num_cameras, num_frames, *input_array.shape].
+    The ordering of the elements in the list representation matches the ordering of the camera_ids and frame_ids lists.
+    """
+    num_cameras = max(camera_ids) + 1
+    num_frames = max(frame_ids) + 1
 
-    n_joints = inp[0][1].shape[0]
-    n_dim = inp[0][1].shape[1]
+    reshaped_outputs = np.zeros((num_cameras, num_frames, *outputs[0].shape))
 
-    points2d = np.zeros((n_cameras, n_images, n_joints, n_dim))
+    for output, camera_id, frame_id in zip(outputs, camera_ids, frame_ids):
+        reshaped_outputs[camera_id, frame_id] = output
 
-    for (path, pts) in inp:
-        cid, imgid = parse_img_path(path)
-        points2d[cid, imgid] = pts
-
-    return points2d
+    return reshaped_outputs
