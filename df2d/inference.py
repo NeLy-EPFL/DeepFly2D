@@ -10,6 +10,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import gc
 
 from df2d.dataset import Drosophila2Dataset
 from df2d.model import Drosophila2DPose
@@ -144,6 +145,11 @@ def inference(
 
         if return_heatmap:
             heatmaps += [heatmap for heatmap in heatmap_batch.numpy()]
+
+        # Clear intermediate tensors and cache - this is to avoid memory leaks that crash the program!
+        del x, heatmap_batch, points_batch, conf_batch
+        torch.cuda.empty_cache()
+        gc.collect()
 
     points2d = reshape_outputs(points_output, camera_ids_output, frame_ids_output)
 
