@@ -14,7 +14,7 @@ import gc
 
 from df2d.dataset import Drosophila2Dataset
 from df2d.model import Drosophila2DPose
-from df2d.util import heatmap2points, pwd
+from df2d.util import heatmap2points, heatmap_peaks, pwd
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -40,9 +40,13 @@ def inference_folder(
     camera_ids_to_flip: List[int],
     return_heatmap: bool = False,
     return_confidence: bool = False,
+    return_peaks: bool = False,
+    num_peaks: int = 10,
+    peak_min_distance: int = 1,
+    peak_threshold_rel: float = 0.5,
     max_img_id: Optional[int] = None,
-    batch_size: int = 8, 
-    disable_pin_memory: bool = False, 
+    batch_size: int = 8,
+    disable_pin_memory: bool = False,
     model_args: Dict[str,Any] = {},
 ):
     """processes all the images under a folder.
@@ -51,6 +55,11 @@ def inference_folder(
     >>> points2d = inference_folder('/home/user/Desktop/DeepFly3D/data/test/')
     >>> points2d.shape
     >>>     (7, 15, 19, 2) # n_cameras, n_images, n_joints, 2
+
+    With `return_peaks=True`, an additional array of shape
+    (n_cameras, n_images, n_joints, num_peaks, 3) is appended to the
+    return tuple. The last axis is (y_normalized, x_normalized, score)
+    -- see `df2d.util.heatmap_peaks`.
     """
     checkpoint_path = os.path.join(pwd(), "../weights/sh8_deepfly.tar")
     if not os.path.exists(checkpoint_path):
@@ -61,13 +70,19 @@ def inference_folder(
     model = Drosophila2DPose(checkpoint_path=checkpoint_path, **args).to(device)
     model.eval() # makes pose estimation more deterministic during inference #5
 
-    # See #7, from https://github.com/pytorch/pytorch/blob/0ff6f7a04083d3fb7f4084cc16175d6cce6ff4b5/torch/utils/data/dataloader.py#L592-L621 
+    # See #7, from https://github.com/pytorch/pytorch/blob/0ff6f7a04083d3fb7f4084cc16175d6cce6ff4b5/torch/utils/data/dataloader.py#L592-L621
     num_workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 4
     dataset = Drosophila2Dataset(folder, None, camera_ids_to_flip, max_img_id+1 if max_img_id is not None else None)
     dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, pin_memory=not disable_pin_memory)
 
     return inference(
-        model, dataloader, return_heatmap=return_heatmap, return_confidence=return_confidence
+        model, dataloader,
+        return_heatmap=return_heatmap,
+        return_confidence=return_confidence,
+        return_peaks=return_peaks,
+        num_peaks=num_peaks,
+        peak_min_distance=peak_min_distance,
+        peak_threshold_rel=peak_threshold_rel,
     )
 
 
@@ -125,12 +140,17 @@ def inference(
     dataloader: DataLoader,
     return_heatmap: bool = False,
     return_confidence: bool = False,
-):   
+    return_peaks: bool = False,
+    num_peaks: int = 10,
+    peak_min_distance: int = 1,
+    peak_threshold_rel: float = 0.5,
+):
     camera_ids_output: List[int] = []
     frame_ids_output: List[int] = []
     points_output: List[np.ndarray] = []
     conf_output: List[np.ndarray] = []
     heatmaps: List[np.ndarray] = []
+    peaks_output: List[np.ndarray] = []
 
     for batch in tqdm(dataloader):
         x, _, (camera_ids, frame_ids) = batch
@@ -146,6 +166,14 @@ def inference(
         if return_heatmap:
             heatmaps += [heatmap for heatmap in heatmap_batch.numpy()]
 
+        if return_peaks:
+            peaks_batch = heatmap_peaks(
+                heatmap_batch, k=num_peaks,
+                min_distance=peak_min_distance,
+                threshold_rel=peak_threshold_rel,
+            )
+            peaks_output += [p for p in peaks_batch]
+
         # Clear intermediate tensors and cache - this is to avoid memory leaks that crash the program!
         del x, heatmap_batch, points_batch, conf_batch
         torch.cuda.empty_cache()
@@ -153,9 +181,9 @@ def inference(
 
     points2d = reshape_outputs(points_output, camera_ids_output, frame_ids_output)
 
-    if not return_heatmap and not return_confidence:
+    if not return_heatmap and not return_confidence and not return_peaks:
         return points2d
-    
+
     ret = (points2d,)
     if return_confidence:
         conf = reshape_outputs(conf_output, camera_ids_output, frame_ids_output)
@@ -163,6 +191,9 @@ def inference(
     if return_heatmap:
         heatmap = reshape_outputs(heatmaps, camera_ids_output, frame_ids_output)
         ret += (heatmap,)
+    if return_peaks:
+        peaks = reshape_outputs(peaks_output, camera_ids_output, frame_ids_output)
+        ret += (peaks,)
     return ret
 
 def parse_img_path(name: str) -> Tuple[int, int]:

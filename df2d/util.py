@@ -23,6 +23,65 @@ def heatmap2points(x: Tensor) -> Tuple[Tensor,Tensor]:
     return out, conf
 
 
+def heatmap_peaks(heatmaps,
+                  k: int = 10,
+                  min_distance: int = 1,
+                  threshold_rel: float = 0.5) -> np.ndarray:
+    """
+    Extract up to `k` local-maximum peaks per channel from a heatmap batch.
+
+    Used to feed multiple 2D-pose candidates per joint into the pictorial-
+    structures (belief propagation) pose-correction step.
+
+    Parameters
+    ----------
+    heatmaps : torch.Tensor or np.ndarray
+        Shape (B, C, H, W). Tensors are moved to CPU and converted to numpy.
+    k : int
+        Maximum number of peaks per channel.
+    min_distance : int
+        Minimum pixel separation between accepted peaks.
+    threshold_rel : float
+        Threshold as a fraction of the per-channel maximum. Pixels below
+        this value are not considered as peak candidates.
+
+    Returns
+    -------
+    peaks : np.ndarray
+        Shape (B, C, k, 3), dtype float32. Last axis: (y_normalized,
+        x_normalized, score). y and x are divided by H and W respectively,
+        matching the convention of `heatmap2points`. Slots beyond the
+        number of detected peaks are padded with (0, 0, 0); padded entries
+        can be distinguished from real ones by `score == 0`.
+    """
+    from scipy.ndimage import maximum_filter
+
+    if isinstance(heatmaps, Tensor):
+        heatmaps = heatmaps.cpu().numpy()
+
+    B, C, H, W = heatmaps.shape
+    footprint_size = 2 * min_distance + 1
+    out = np.zeros((B, C, k, 3), dtype=np.float32)
+    for b in range(B):
+        for c in range(C):
+            hm = heatmaps[b, c]
+            hm_max = hm.max()
+            if hm_max <= 0:
+                continue
+            local_max = maximum_filter(hm, size=footprint_size) == hm
+            above_threshold = hm > (hm_max * threshold_rel)
+            ys, xs = np.nonzero(local_max & above_threshold)
+            if ys.size == 0:
+                continue
+            scores = hm[ys, xs]
+            order = np.argsort(-scores)[:k]
+            n = order.size
+            out[b, c, :n, 0] = ys[order] / H
+            out[b, c, :n, 1] = xs[order] / W
+            out[b, c, :n, 2] = scores[order]
+    return out
+
+
 # draw 2d gaussians
 def draw_labelmap(img: np.ndarray, pt, sigma=3, type="Gaussian"):
     # Draw a 2D gaussian
