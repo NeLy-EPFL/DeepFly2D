@@ -161,7 +161,7 @@ def inference(
         conf = reshape_outputs(conf_output, camera_ids_output, frame_ids_output)
         ret += (conf,)
     if return_heatmap:
-        heatmap = reshape_outputs(heatmap_batch, camera_ids_output, frame_ids_output)
+        heatmap = reshape_outputs(heatmaps, camera_ids_output, frame_ids_output)
         ret += (heatmap,)
     return ret
 
